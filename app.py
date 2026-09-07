@@ -19,6 +19,7 @@ st.set_page_config(
 
 model = joblib.load("logistic_regression_model.pkl")
 scaler = joblib.load("scaler.pkl")
+monthly_charge_model = joblib.load("monthly_charges_model.pkl")
 
 # ======================================
 # Sidebar
@@ -135,18 +136,7 @@ with col2:
         value=12
     )
 
-    monthly_charges = st.number_input(
-        "Monthly Charges",
-        min_value=18.0,
-        max_value=120.0,
-        value=70.0
-    )
-
-    total_charges = st.number_input(
-        "Total Charges",
-        min_value=0.0,
-        value=840.0
-    )
+    
 
 st.markdown("---")
 
@@ -235,6 +225,68 @@ with col6:
 
 st.markdown("---")
 
+# ======================================
+# Automatic Charges Estimation
+# ======================================
+
+charge_input = pd.DataFrame([{
+    "gender": gender,
+    "SeniorCitizen": 1 if senior == "Yes" else 0,
+    "Partner": partner,
+    "Dependents": dependents,
+    "tenure": tenure,
+    "PhoneService": phone_service,
+    "MultipleLines": multiple_lines,
+    "InternetService": internet_service,
+    "OnlineSecurity": online_security,
+    "OnlineBackup": online_backup,
+    "DeviceProtection": device_protection,
+    "TechSupport": tech_support,
+    "StreamingTV": streaming_tv,
+    "StreamingMovies": streaming_movies,
+    "Contract": contract,
+    "PaperlessBilling": paperless,
+    "PaymentMethod": payment
+}])
+
+estimated_monthly_charges = monthly_charge_model.predict(
+    charge_input
+)[0]
+
+estimated_monthly_charges = round(
+    max(0, estimated_monthly_charges),
+    2
+)
+
+estimated_total_charges = round(
+    estimated_monthly_charges * tenure,
+    2
+)
+
+st.header("💰 Estimated Charges")
+
+charge_col1, charge_col2 = st.columns(2)
+
+with charge_col1:
+    st.metric(
+        "Estimated Monthly Charges",
+        f"${estimated_monthly_charges:.2f}"
+    )
+
+with charge_col2:
+    st.metric(
+        "Estimated Total Charges",
+        f"${estimated_total_charges:.2f}"
+    )
+
+st.caption(
+    "Monthly charges are estimated from the selected customer profile "
+    "and services using patterns learned from the original Telco dataset. "
+    "Total charges are estimated as monthly charges × tenure."
+)
+
+st.markdown("---")
+
 
 left, center, right = st.columns([1, 2, 1])
 
@@ -255,8 +307,8 @@ if predict:
 
         'SeniorCitizen': 1 if senior == "Yes" else 0,
         'tenure': tenure,
-        'MonthlyCharges': monthly_charges,
-        'TotalCharges': total_charges,
+        'MonthlyCharges': estimated_monthly_charges,
+        'TotalCharges': estimated_total_charges,
 
         'gender_Male': 1 if gender == "Male" else 0,
 
@@ -341,17 +393,29 @@ if predict:
     col1, col2 = st.columns(2)
 
     with col1:
-
         if prediction == 1:
-            st.error("🚨 High Churn Risk")
-            st.write(
-                "The customer has a high probability of leaving the telecom service."
-        )
+            st.error(" ⚠️ Elevated Churn Risk")
         else:
             st.success("✅ Customer Likely to Stay")
-            st.write(
-                "The customer shows a low probability of churn based on the provided information."
+
+    # Dynamic probability interpretation
+    if probability < 0.30:
+        probability_message = (
+            "The customer has a relatively low probability of churn "
+            "based on the provided information."
         )
+    elif probability < 0.60:
+        probability_message = (
+            "The customer has a moderate probability of churn "
+            "based on the provided information."
+        )
+    else:
+        probability_message = (
+            "The customer has a relatively high probability of churn "
+            "based on the provided information."
+        )
+
+    st.write(probability_message)
 
     st.metric(
         label="Churn Probability",
@@ -373,40 +437,88 @@ if predict:
 
         st.progress(float(probability))
 
+    #st.markdown("---")
+
+#st.markdown("---")
+
+
+
+# ======================================
+# Risk Indicators
+# ======================================
     st.markdown("---")
 
-    
-
-    st.subheader("💡 Top Factors Affecting the Prediction")
+    st.subheader("💡 Risk Indicators")
 
     factors = []
 
-# Positive (increase churn risk)
-    if monthly_charges > 80:
-        factors.append(("🔴", "High Monthly Charges", "Increase churn risk"))
+    if estimated_monthly_charges > 80:
+        factors.append(
+            (
+                "🔴",
+                "High Monthly Charges",
+                "Higher monthly charges may increase churn risk"
+            )
+        )
 
     if payment == "Electronic check":
-        factors.append(("🔴", "Electronic Check Payment", "Customers using this payment method churn more frequently"))
+        factors.append(
+            (
+                "🔴",
+                "Electronic Check Payment",
+                "This payment method is historically associated with higher churn"
+            )
+        )
 
     if internet_service == "Fiber optic":
-        factors.append(("🔴", "Fiber Optic Internet", "Historically associated with higher churn"))
+        factors.append(
+            (
+                "🔴",
+                "Fiber Optic Internet",
+                "Fiber optic customers have historically shown higher churn"
+            )
+        )
 
     if paperless == "Yes":
-        factors.append(("🟡", "Paperless Billing", "Slight positive association with churn"))
+        factors.append(
+            (
+                "🟡",
+                "Paperless Billing",
+                "Paperless billing has a slight positive association with churn"
+            )
+        )
 
-# Negative (reduce churn risk)
     if tenure > 24:
-        factors.append(("🟢", "Long Customer Tenure", "Reduces churn risk"))
+        factors.append(
+            (
+                "🟢",
+                "Long Customer Tenure",
+                "Longer tenure is generally associated with lower churn"
+            )
+        )
 
     if contract != "Month-to-month":
-        factors.append(("🟢", "Long-Term Contract", "Strongly reduces churn"))
+        factors.append(
+            (
+                "🟢",
+                "Long-Term Contract",
+                "Long-term contracts are strongly associated with lower churn"
+            )
+        )
 
     if len(factors) == 0:
-        st.info("No major churn-driving factors detected for this customer.")
+        st.info(
+            "No major churn risk indicators detected for this customer."
+        )
 
     for icon, title, desc in factors:
         st.write(f"**{icon} {title}**")
         st.caption(desc)
+
+
+# ======================================
+# Suggested Business Action
+# ======================================
 
     st.markdown("---")
 
@@ -414,19 +526,21 @@ if predict:
 
     if probability >= 0.70:
         st.error(
-        "Offer a retention discount, priority customer support, or a long-term contract to reduce churn risk."
-    )
+            "Offer a retention discount, priority customer support, "
+            "or a long-term contract to reduce churn risk."
+        )
 
     elif probability >= 0.30:
         st.warning(
-            "Monitor customer engagement and consider targeted promotional offers."
-    )
+            "Monitor customer engagement and consider targeted "
+            "promotional offers."
+        )
 
     else:
         st.success(
-            "No immediate retention action is required. Continue providing a positive customer experience."
-    )
-
+            "No immediate retention action is required. "
+            "Continue providing a positive customer experience."
+        )
 st.markdown("---")
 
 st.markdown(
