@@ -9,7 +9,7 @@ The application is built using **Python**, **Scikit-learn**, and **Streamlit**, 
 ## Live Demo
 
 🔗 **Live Application:**  
-(https://telecom-customer-churn-prediction-app07.streamlit.app/)
+https://telecom-customer-churn-prediction-app07.streamlit.app/
 
 🔗 **GitHub Repository:**  
 https://github.com/Himanshi7104/telecom-customer-churn-prediction
